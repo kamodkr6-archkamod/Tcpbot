@@ -240,15 +240,12 @@ async def process_visit_task(
 
     # 🔒 OFFICIAL GROUP LOCK
     if chat_id != OFFICIAL_GROUP_ID:
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "👥 JOIN OFFICIAL GROUP",
-                    url="https://t.me/KAMOD_LIKE_GROUP"
-                )
-            ]
-        ]
-
+        keyboard = [[
+            InlineKeyboardButton(
+                "👥 JOIN OFFICIAL GROUP",
+                url="https://t.me/KAMOD_LIKE_GROUP"
+            )
+        ]]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         await context.bot.edit_message_text(
@@ -284,11 +281,13 @@ async def process_visit_task(
     target_success = 20000
     total_success = 0
     total_sent = 0
-    last_percent = -1   # ✅ ADDED
+    last_percent = -1
 
-    sem = asyncio.Semaphore(200)
+    sem = asyncio.Semaphore(1000)
 
-    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=None)) as session:
+    async with aiohttp.ClientSession(
+        connector=aiohttp.TCPConnector(limit=None)
+    ) as session:
 
         while total_success < target_success:
 
@@ -299,7 +298,9 @@ async def process_visit_task(
                     return await send_request(session, enc_data, token, url)
 
             tasks = [
-                bound_req(valid_tokens[(total_sent + i) % len(valid_tokens)]["token"])
+                bound_req(
+                    valid_tokens[(total_sent + i) % len(valid_tokens)]["token"]
+                )
                 for i in range(batch_size)
             ]
 
@@ -309,31 +310,32 @@ async def process_visit_task(
             total_success += batch_success
             total_sent += batch_size
 
-            # ✅ REAL TIME PROGRESS UPDATE
+            # ✅ LIMITED NON-BLOCKING PROGRESS
             percent = int((total_success / target_success) * 100)
 
-            if percent > 100:
-                percent = 100
+            update_points = [10, 20, 40, 60, 80, 100]
 
-            if percent != last_percent:
-                last_percent = percent
+            for point in update_points:
+                if percent >= point and last_percent < point:
+                    last_percent = point
 
-                filled = int(10 * percent / 100)
-                bar = "█" * filled + "░" * (10 - filled)
+                    filled = int(10 * point / 100)
+                    bar = "█" * filled + "░" * (10 - filled)
 
-                try:
-                    await context.bot.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=msg_id,
-                        text=f"⏳ PROCESSING...\n\n⚡ {percent}% {bar}"
-                    )
-                except:
-                    pass
+                    try:
+                        asyncio.create_task(
+                            context.bot.edit_message_text(
+                                chat_id=chat_id,
+                                message_id=msg_id,
+                                text=f"⏳ PROCESSING....!\n\n⚡ {point}% {bar}"
+                            )
+                        )
+                    except:
+                        pass
+                    break
 
             if batch_success == 0:
                 break
-
-    # ❌ FAKE ANIMATION REMOVED
 
     success = total_success
     name, likes = await name_task
